@@ -10,7 +10,8 @@
 #define NO_UMASK0          010  //не выполнять umask(0)
 #define MAX_CLOSE         8192  //если не определена sysconf(_SC_OPEN_MAX)
 
-int createDaemon(int flags) {
+int createDaemon(int flags) 
+{
     int fd, maxfd;
 
     switch (fork())
@@ -20,8 +21,7 @@ int createDaemon(int flags) {
         default: _exit(0);
     }
 
-    if (setsid() == -1)
-        return -1;
+    if (setsid() == -1) return -1;
 
     switch (fork())
     {
@@ -30,34 +30,25 @@ int createDaemon(int flags) {
         default: _exit(0);
     }
 
-    if (!(flags && NO_UMASK0))
-        umask(0);
+    if (!(flags && NO_UMASK0)) umask(0);
+    if (!(flags && NO_CHDIR)) chdir("/");
 
-    if (!(flags && NO_CHDIR))
-        chdir("/");
-
-    if (!(flags && NO_CLOSE_FILES)) {
+    if (!(flags && NO_CLOSE_FILES)) 
+    {
         maxfd = sysconf(_SC_OPEN_MAX);
-        if (maxfd == -1)
-            maxfd = MAX_CLOSE;
-
-        for (fd = 0; fd < maxfd; ++fd)
-            close(fd);
+        if (maxfd == -1) maxfd = MAX_CLOSE;
+        for (fd = 0; fd < maxfd; ++fd) close(fd);
     }
 
-    if (!(flags && NO_REOPEN_STD_FDS)) {
+    if (!(flags && NO_REOPEN_STD_FDS)) 
+    {
         close(STDIN_FILENO);
 
         fd = open("/dev/null", O_RDWR);
 
-        if (fd != STDIN_FILENO)
-            return -1;
-        
-        if (dup2(STDIN_FILENO, STDOUT_FILENO) != STDOUT_FILENO)
-            return -1;
-
-        if (dup2(STDIN_FILENO, STDERR_FILENO) != STDERR_FILENO)
-            return -1;
+        if (fd != STDIN_FILENO) return -1;
+        if (dup2(STDIN_FILENO, STDOUT_FILENO) != STDOUT_FILENO) return -1;
+        if (dup2(STDIN_FILENO, STDERR_FILENO) != STDERR_FILENO) return -1;
     }
 
     return 0;

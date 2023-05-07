@@ -13,18 +13,22 @@ const char *LOG_FILE = "/tmp/ftracker.log";
 
 FILE *flog;
 
-int getfSize(char *str) {
+int getfSize(char *str) 
+{
     struct stat file;
-    if (stat(str, &file) == -1) {
+    if (stat(str, &file) == -1) 
+    {
         perror("stat");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     return file.st_size;
 }
 
-void readConfig() {
-    if (hashTable != NULL) {
+void readConfig() 
+{
+    if (hashTable) 
+    {
         memset(hashTable, 0, sizeof(hashTable));
         freeHash(HashTableSize);
     }
@@ -33,47 +37,57 @@ void readConfig() {
     FILE *fconfig = fopen(CONFIG_FILE, "r");
 
     fgets(buf, BUFSIZE, fconfig);
-    if (ferror(fconfig)) {
+    if (ferror(fconfig)) 
+    {
         perror("fgets");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     HashTableSize = atoi(buf);
     hashTable = malloc(sizeof(struct linked_list*) * HashTableSize);
-    if (hashTable == NULL) {
+    if (!hashTable) 
+    {
         perror("malloc");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     //################to avoid segmentation faults################
     for (int index = 0; index < HashTableSize; ++index)
+    {
         hashTable[index] = NULL;
+    } 
     //############################################################
 
-    while (fgets(buf, BUFSIZE, fconfig) != NULL) {
-
+    while (fgets(buf, BUFSIZE, fconfig)) 
+    {
         if (buf[strlen(buf)-1] == '\n')
+        {
             buf[strlen(buf)-1] = '\0';
+        } 
 
         int index = Hash(buf);
 
         struct linked_list *new_list = malloc(sizeof(struct linked_list));
-        if (new_list == NULL) {
+        if (!new_list) 
+        {
             perror("malloc");
-            exit(-1);
+            exit(EXIT_FAILURE);
         }
 
         new_list->next = NULL;
 
-        if (hashTable[index] != NULL) 
+        if (hashTable[index])
+        {
             new_list->next = hashTable[index];
+        } 
 
         hashTable[index] = new_list;
 
         hashTable[index]->str = malloc(sizeof(strlen(buf) + 1));
-        if (hashTable[index]->str == NULL) {
+        if (!hashTable[index]->str) 
+        {
             perror("malloc");
-            exit(-1);
+            exit(EXIT_FAILURE);
         }
 
         strcpy(hashTable[index]->str, buf);
@@ -81,31 +95,38 @@ void readConfig() {
 
     }
 
-    if (ferror(fconfig)) {
+    if (ferror(fconfig)) 
+    {
         perror("fgets");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     fclose(fconfig);
 }
 
-void logOpen() {
+void logOpen() 
+{
     flog = fopen(LOG_FILE, "a+");
-    if (flog == NULL) {
+    if (!flog) 
+    {
         perror("fopen");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 }
 
-void logClose() {
+void logClose() 
+{
     fclose(flog);
 }
 
-void logMessage(char *msg) {
-    fputs(msg, flog); 
-    if (ferror(flog)) {
+void logMessage(char *msg) 
+{
+    fputs(msg, flog);
+    printf("log: %s\n", msg); 
+    if (ferror(flog)) 
+    {
         perror("fputs");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 }
 

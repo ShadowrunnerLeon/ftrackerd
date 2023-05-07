@@ -21,28 +21,29 @@
 #include "createdaemon.h"
 #include "logLib.h"
 
-static int SLEEP_TIME = 5;
-static char *PORT = "16680";
+int SLEEP_TIME = 5;
+char *PORT = "16680";
 
-static sig_atomic_t flagSIGHUP;
-static int sockfd = -1;
+sig_atomic_t flagSIGHUP;
+int sockfd = -1;
 
 //sighandler SIGHUP and SIGTERM
-static void sighandler(int sig) {
-    if (sig == SIGHUP) 
+void sighandler(int sig) 
+{
+    if (sig == SIGHUP)
+    {
         flagSIGHUP = 1;
-    else {
-        if (flog != NULL)
-            logClose();
-        if (sockfd != -1)
-            close(sockfd);
-
+    } 
+    else 
+    {
+        if (flog) logClose();
+        if (sockfd != -1) close(sockfd);
         exit(0);
     }
 }
 
-static void responseHandler() {
-    //#########pending request from client#############
+void WaitRequestFromClient()
+{
     fd_set fds;
     int nfds = sockfd + 1;
     int serr;
@@ -60,26 +61,25 @@ static void responseHandler() {
     }
     else if (serr == -1) {
         perror("select");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
-    //#################################################
+}
 
+void Recv(char *recv_buf, struct sockaddr *addr_from, socklen_t *addr_size)
+{
     int numbytes;
-    char recv_buf[BUFSIZE];
-    char send_buf[2*BUFSIZE];
-    struct sockaddr addr_from;
-    socklen_t addr_size = sizeof addr_from;
-
-    memset(send_buf, 0, sizeof send_buf);
-    memset(recv_buf, 0, sizeof recv_buf);
-
-    if ((numbytes = recvfrom(sockfd, recv_buf, BUFSIZE-1, 0, &addr_from, &addr_size))==-1) {
+    
+    if ((numbytes = recvfrom(sockfd, recv_buf, BUFSIZE - 1, 0, addr_from, addr_size)) == -1) 
+    {
         perror("recvfrom");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     recv_buf[strlen(recv_buf)] = '\0';
+}
 
+void CommandAnalysis(char *send_buf, char *recv_buf, struct sockaddr *addr_from, socklen_t addr_size)
+{
     //###########server commands################
     //hello - display greeting
     //track - display file status(changed or not changed) of all files
@@ -88,55 +88,68 @@ static void responseHandler() {
     //##########################################
 
     if (!strcmp(recv_buf, "hello"))
+    {
         strcpy(send_buf, "Hello, client!\n");
-    else if (!strcmp(recv_buf, "track")) {
+    }
+    else if (!strcmp(recv_buf, "track")) 
+    {
         send_buf[0] = '\n';
 
-        for (int index = 0; index < HashTableSize; ++index) {
-            if (hashTable[index] == NULL) 
-                continue;
+        for (int index = 0; index < HashTableSize; ++index) 
+        {
+            if (!hashTable[index]) continue;
             
-            struct linked_list *tmp = hashTable[index];
+            struct linked_list *hashValue = hashTable[index];
 
-            while (tmp != NULL) {
+            while (hashValue) 
+            {
+                int newSize = getfSize(hashValue->str);
 
-                int newSize = getfSize(tmp->str);
-
-                if (tmp->fSize != newSize) {
-                    tmp->fSize = newSize;
-                    sprintf(&send_buf[strlen(send_buf)], "%s: changed\n", tmp->str);
+                if (hashValue->fSize != newSize) 
+                {
+                    hashValue->fSize = newSize;
+                    sprintf(&send_buf[strlen(send_buf)], "%s: changed\n", hashValue->str);
                 }
                 else 
-                    sprintf(&send_buf[strlen(send_buf)], "%s: not changed\n", tmp->str);
+                {
+                    sprintf(&send_buf[strlen(send_buf)], "%s: not changed\n", hashValue->str);
+                }
 
-                tmp = tmp->next;
+                hashValue = hashValue->next;
             }
         }
 
         logMessage(send_buf);
     }
-    else if (strstr(recv_buf, "track") != NULL) {
+    else if (strstr(recv_buf, "track")) 
+    {
         char *fname = strtok(recv_buf, " ");
         fname = strtok(NULL, " \n\t");
 
         int newSize = getfSize(fname);
         int index = Hash(fname);
 
-        struct linked_list *tmp = hashTable[index];
+        struct linked_list *hashValue = hashTable[index];
 
-        while (tmp != NULL && strcmp(tmp->str, fname))
-            tmp = tmp->next;   
-
-        if (tmp->fSize != newSize) {
-            tmp->fSize = newSize;
-            sprintf(send_buf, "%s: changed\n", tmp->str);
+        while (hashValue != NULL && strcmp(hashValue->str, fname)) 
+        {
+            hashValue = hashValue->next;   
         }
-        else 
-            sprintf(send_buf, "%s: not changed\n", tmp->str);
+
+        if (hashValue->fSize != newSize) 
+        {
+            hashValue->fSize = newSize;
+            sprintf(send_buf, "%s: changed\n", hashValue->str);
+        }
+        else
+        {
+            sprintf(send_buf, "%s: not changed\n", hashValue->str);
+        } 
         
         logMessage(send_buf);
     }   
-    else if (!strcmp(recv_buf, "help")) {
+    else if (!strcmp(recv_buf, "help")) 
+    {
         strcpy(send_buf, "\n\
         hello       - display greeting\n\
         track       - display file status(changed or not changed)\n\
@@ -144,29 +157,53 @@ static void responseHandler() {
         help        - display this commands\n");
         logMessage(send_buf);
     }
-    else {
+    else 
+    {
         strcpy(send_buf, "Invalid command\n");
         logMessage(send_buf);
     }
 
     logMessage("Sending message...\n");
-    if (sendto(sockfd, send_buf, sizeof(send_buf), 0, &addr_from, addr_size)==-1) {
+
+    printf("recv: %s\n", recv_buf);
+    printf("send: %s\n", send_buf);
+
+    if (sendto(sockfd, send_buf, sizeof(send_buf), 0, addr_from, addr_size) == -1) 
+    {
         perror("sendto");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 }
 
-int main(int argc, char *argv[]) {
+void responseHandler() 
+{
+    char recv_buf[BUFSIZE];
+    char send_buf[2 * BUFSIZE];
+    struct sockaddr addr_from;
+    socklen_t addr_size = sizeof addr_from;
 
-    if (argc == 2) {
+    memset(send_buf, 0, sizeof send_buf);
+    memset(recv_buf, 0, sizeof recv_buf);
+
+    Recv(recv_buf, &addr_from, &addr_size);
+    CommandAnalysis(send_buf, recv_buf, &addr_from, addr_size);
+}
+
+void SetParametrs(int argc, char *argv[])
+{
+    if (argc == 2) 
+    {
         PORT = argv[1];
     }
-    else if (argc == 3) {
+    else if (argc == 3) 
+    {
         PORT = argv[1];
         SLEEP_TIME = atoi(argv[2]);
     }
+}
 
-    //###########configuring signal handlers################
+void SetSigHandler()
+{
     struct sigaction saHUP, saTERM;
 
     sigemptyset(&saHUP.sa_mask);
@@ -174,26 +211,24 @@ int main(int argc, char *argv[]) {
 
     saHUP.sa_flags = SA_RESTART;
     saHUP.sa_handler = sighandler;
-    if (sigaction(SIGHUP, &saHUP, NULL) == -1) {
+    if (sigaction(SIGHUP, &saHUP, NULL) == -1) 
+    {
         perror("sigaction");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     saTERM.sa_flags = SA_RESTART;
     saTERM.sa_handler = sighandler;
-    if (sigaction(SIGTERM, &saTERM, NULL) == -1) {
+    if (sigaction(SIGTERM, &saTERM, NULL) == -1) 
+    {
         perror("sigaction");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
-    //######################################################
+}
 
-    if (createDaemon(0) == -1) {
-        perror("daemon");
-        exit(-1);
-    }
-
-    //###########server settings################
-    struct addrinfo hints, *res, *p;
+void Initialize()
+{
+    struct addrinfo hints, *res, *ptr;
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
@@ -201,24 +236,29 @@ int main(int argc, char *argv[]) {
     hints.ai_flags = AI_PASSIVE;
 
     int rv;
-    if ((rv = getaddrinfo(NULL, PORT, &hints, &res))!=0) {
+    if ((rv = getaddrinfo(NULL, PORT, &hints, &res))) 
+    {
         printf("getaddrinfo: %s\n", gai_strerror(rv));
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
-    for (p = res; p!=NULL; p = p->ai_next) {
-        if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol))==-1) {
+    for (ptr = res; ptr != NULL; ptr = ptr->ai_next) 
+    {
+        if ((sockfd = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol)) == -1) 
+        {
             perror("server: sockfd");
             continue;
         }
 
         int yes = 1;
-        if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int))==-1) {
+        if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) 
+        {
             perror("setsockopt");
-            exit(-1);
+            exit(EXIT_FAILURE);
         }
         
-        if (bind(sockfd, p->ai_addr, p->ai_addrlen)==-1) {
+        if (bind(sockfd, ptr->ai_addr, ptr->ai_addrlen)==-1) 
+        {
             close(sockfd);
             perror("server: bind");
             continue;
@@ -227,25 +267,30 @@ int main(int argc, char *argv[]) {
         break;
     }
 
-    if (p==NULL) {
+    if (!ptr) 
+    {
         printf("p: null pointer\n");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     freeaddrinfo(res);
-    //##########################################
+}
 
+void Service()
+{
     readConfig();
     logOpen();
 
     int unslept = SLEEP_TIME;
     int count = 0;
 
-    while(1) {
+    while(true) 
+    {
         unslept = sleep(unslept);
 
         //#####Update config#####
-        if (flagSIGHUP) {
+        if (flagSIGHUP) 
+        {
             logClose();
             readConfig();
             logOpen();
@@ -254,7 +299,8 @@ int main(int argc, char *argv[]) {
         }
         //#######################
 
-        if (!unslept) {
+        if (!unslept) 
+        {
             responseHandler();
             unslept = SLEEP_TIME;
         }
