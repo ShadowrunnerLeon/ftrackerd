@@ -9,11 +9,7 @@ ftrackerd is a daemon that monitors file size changes using fstat () and sends r
 - HashTable.h - functions for working with a hash table.
 
 ## How to use
-Before using it, you need to create files in /tmp:
-- ftracker.config
-- ftracker.log
-
-Next, fill in tracker. config as follows: the first line contains the number of files to track, each subsequent line corresponds to the file name (use an absolute path). An example of the config is available in this repository.
+Before using it, you need to setup create_test_files.py
 
 Example of running the program:
 
@@ -44,3 +40,8 @@ If you updated the config while the daemon was running, you need to send it a SI
 To disable the daemon, enter:
 
     sudo killall ./ftrackerd
+
+To delete test files, setup delete_test_files.py
+
+## P.S
+You can fill in the config with your values. The first line is responsible for the number of tracked files, and the following lines are the paths to those files.
