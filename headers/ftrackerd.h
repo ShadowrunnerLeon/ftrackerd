@@ -1,6 +1,5 @@
 /**
  * ftrackerd - daemon for tracking files and transmitting information about their changes over the network
- * Author: Leonid Sorokin
  **/
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -38,6 +37,7 @@ void sighandler(int sig)
     {
         if (flog) logClose();
         if (sockfd != -1) close(sockfd);
+        if (hashTable) freeHash(HashTableSize);
         exit(0);
     }
 }
@@ -103,50 +103,46 @@ void CommandAnalysis(char *send_buf, char *recv_buf, struct sockaddr *addr_from,
 
             while (hashValue) 
             {
-                int newSize = getfSize(hashValue->str);
+                int newSize = getSize(hashValue->filename);
 
-                if (hashValue->fSize != newSize) 
+                if (hashValue->size != newSize) 
                 {
-                    hashValue->fSize = newSize;
-                    sprintf(&send_buf[strlen(send_buf)], "%s: changed\n", hashValue->str);
+                    hashValue->size = newSize;
+                    sprintf(&send_buf[strlen(send_buf)], "%s: changed\n", hashValue->filename);
                 }
                 else 
                 {
-                    sprintf(&send_buf[strlen(send_buf)], "%s: not changed\n", hashValue->str);
+                    sprintf(&send_buf[strlen(send_buf)], "%s: not changed\n", hashValue->filename);
                 }
 
                 hashValue = hashValue->next;
             }
         }
-
-        logMessage(send_buf);
     }
     else if (strstr(recv_buf, "track")) 
     {
         char *fname = strtok(recv_buf, " ");
         fname = strtok(NULL, " \n\t");
 
-        int newSize = getfSize(fname);
+        int newSize = getSize(fname);
         int index = Hash(fname);
 
         struct linked_list *hashValue = hashTable[index];
 
-        while (hashValue != NULL && strcmp(hashValue->str, fname)) 
+        while (hashValue && strcmp(hashValue->filename, fname)) 
         {
             hashValue = hashValue->next;   
         }
 
-        if (hashValue->fSize != newSize) 
+        if (hashValue->size != newSize) 
         {
-            hashValue->fSize = newSize;
-            sprintf(send_buf, "%s: changed\n", hashValue->str);
+            hashValue->size = newSize;
+            sprintf(send_buf, "%s: changed\n", hashValue->filename);
         }
         else
         {
-            sprintf(send_buf, "%s: not changed\n", hashValue->str);
+            sprintf(send_buf, "%s: not changed\n", hashValue->filename);
         } 
-        
-        logMessage(send_buf);
     }   
     else if (!strcmp(recv_buf, "help")) 
     {
@@ -155,20 +151,17 @@ void CommandAnalysis(char *send_buf, char *recv_buf, struct sockaddr *addr_from,
         track       - display file status(changed or not changed)\n\
         track file1 - display file status(changed or not changed) of file1\n\
         help        - display this commands\n");
-        logMessage(send_buf);
     }
     else 
     {
         strcpy(send_buf, "Invalid command\n");
-        logMessage(send_buf);
     }
 
     logMessage("Sending message...\n");
+    logMessage(send_buf);
+    logMessage("\n");
 
-    printf("recv: %s\n", recv_buf);
-    printf("send: %s\n", send_buf);
-
-    if (sendto(sockfd, send_buf, sizeof(send_buf), 0, addr_from, addr_size) == -1) 
+    if (sendto(sockfd, send_buf, strlen(send_buf), 0, addr_from, addr_size) == -1) 
     {
         perror("sendto");
         exit(EXIT_FAILURE);
@@ -236,9 +229,11 @@ void Initialize()
     hints.ai_flags = AI_PASSIVE;
 
     int rv;
-    if ((rv = getaddrinfo(NULL, PORT, &hints, &res))) 
+    if (rv = getaddrinfo(NULL, PORT, &hints, &res))
     {
-        printf("getaddrinfo: %s\n", gai_strerror(rv));
+        logMessage("getaddrinfo:");
+        logMessage(gai_strerror(rv));
+        logMessage("\n");
         exit(EXIT_FAILURE);
     }
 
@@ -269,7 +264,7 @@ void Initialize()
 
     if (!ptr) 
     {
-        printf("p: null pointer\n");
+        logMessage("p: null pointer\n");
         exit(EXIT_FAILURE);
     }
 
@@ -292,6 +287,7 @@ void Service()
         if (flagSIGHUP) 
         {
             logClose();
+            freeHash(HashTableSize);
             readConfig();
             logOpen();
             logMessage("restart\n");

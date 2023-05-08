@@ -56,7 +56,7 @@ sockfd_and_addrindo_ptr Initialize()
     hints.ai_socktype = SOCK_DGRAM;
 
     int rv;
-    if ((rv = getaddrinfo(INADDR_ANY, PORT, &hints, &res))) 
+    if (rv = getaddrinfo(INADDR_ANY, PORT, &hints, &res))
     {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         exit(EXIT_FAILURE);
@@ -85,24 +85,24 @@ sockfd_and_addrindo_ptr Initialize()
     return sock_and_ptr;
 }
 
-void Send(int sockfd, struct addrinfo *ptr)
+void Send(int sockfd, struct addrinfo *addr)
 {
     printf("Client send message: %s\n", send_message); 
     
-    if (sendto(sockfd, send_message, strlen(send_message), 0, ptr->ai_addr, ptr->ai_addrlen) == -1) 
+    if (sendto(sockfd, send_message, strlen(send_message), 0, addr->ai_addr, addr->ai_addrlen) == -1) 
     {
         perror("sendto");
         exit(EXIT_FAILURE);
     }
 
-    char str_to[INET_ADDRSTRLEN];
-    if (!inet_ntop(AF_INET, get_addr((struct sockaddr*)&ptr), str_to, INET_ADDRSTRLEN)) 
+    char ip_dst[INET_ADDRSTRLEN];
+    if (!inet_ntop(AF_INET, get_addr((struct sockaddr*)&addr), ip_dst, INET_ADDRSTRLEN)) 
     {
         perror("inet_ntop");
         exit(EXIT_FAILURE);
     }
 
-    printf("Sending to %s terminated\n", str_to);
+    printf("Sending to %s terminated\n", ip_dst);
 }
 
 void Recv(int sockfd)
@@ -111,6 +111,7 @@ void Recv(int sockfd)
     socklen_t addr_size = sizeof addr_from;
     char buf[BUFSIZE];
     int numbytes;
+
     if ((numbytes = recvfrom(sockfd, buf, BUFSIZE - 1, 0, &addr_from, &addr_size)) == -1) 
     {
         perror("recvfrom");
@@ -119,14 +120,15 @@ void Recv(int sockfd)
 
     printf("recv: %d\n", numbytes);
 
-    char str_from[INET_ADDRSTRLEN];
-    if (!inet_ntop(AF_INET, get_addr(&addr_from), str_from, INET_ADDRSTRLEN)) 
+    char ip_src[INET_ADDRSTRLEN];
+    if (!inet_ntop(AF_INET, get_addr(&addr_from), ip_src, INET_ADDRSTRLEN)) 
     {
         perror("inet_ntop");
         exit(EXIT_FAILURE);
     }
-    buf[BUFSIZE] = '\0';
-    printf("Client received from %s: %s\n", str_from, buf);
+
+    buf[numbytes] = '\0';
+    printf("Client received from %s: %s\n", ip_src, buf);
 }
 
 void Shutdown(int sockfd)

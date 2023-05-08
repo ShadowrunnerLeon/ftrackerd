@@ -11,12 +11,12 @@
 const char *CONFIG_FILE = "/tmp/ftracker.config";
 const char *LOG_FILE = "/tmp/ftracker.log";
 
-FILE *flog;
+FILE *flog = NULL;
 
-int getfSize(char *str) 
+int getSize(char *filename) 
 {
     struct stat file;
-    if (stat(str, &file) == -1) 
+    if (stat(filename, &file) == -1) 
     {
         perror("stat");
         exit(EXIT_FAILURE);
@@ -27,13 +27,12 @@ int getfSize(char *str)
 
 void readConfig() 
 {
-    if (hashTable) 
-    {
-        memset(hashTable, 0, sizeof(hashTable));
-        freeHash(HashTableSize);
-    }
-
+    /**
+     * @brief 
+     * get count of files from config and initialize hash table
+     */
     char buf[BUFSIZE];
+    
     FILE *fconfig = fopen(CONFIG_FILE, "r");
 
     fgets(buf, BUFSIZE, fconfig);
@@ -57,6 +56,11 @@ void readConfig()
         hashTable[index] = NULL;
     } 
     //############################################################
+
+    /**
+     * @brief 
+     * add information aboit file to hash table
+     */
 
     while (fgets(buf, BUFSIZE, fconfig)) 
     {
@@ -83,16 +87,15 @@ void readConfig()
 
         hashTable[index] = new_list;
 
-        hashTable[index]->str = malloc(sizeof(strlen(buf) + 1));
-        if (!hashTable[index]->str) 
+        hashTable[index]->filename = malloc(sizeof(strlen(buf) + 1));
+        if (!hashTable[index]->filename) 
         {
             perror("malloc");
             exit(EXIT_FAILURE);
         }
 
-        strcpy(hashTable[index]->str, buf);
-        hashTable[index]->fSize = getfSize(buf);
-
+        strcpy(hashTable[index]->filename, buf);
+        hashTable[index]->size = getSize(buf);
     }
 
     if (ferror(fconfig)) 
@@ -121,13 +124,7 @@ void logClose()
 
 void logMessage(char *msg) 
 {
-    fputs(msg, flog);
-    printf("log: %s\n", msg); 
-    if (ferror(flog)) 
-    {
-        perror("fputs");
-        exit(EXIT_FAILURE);
-    }
+    fprintf(flog, msg);
 }
 
 #endif

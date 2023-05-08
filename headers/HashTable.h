@@ -8,21 +8,21 @@ int HashTableSize = 1024;
 
 struct linked_list
 {
-    char *str;
-    int fSize;
+    char *filename;
+    size_t size;
     struct linked_list *next;
 };
 
-struct linked_list **hashTable;
+struct linked_list **hashTable = NULL;
 
-int Hash(const char *str) 
+int Hash(const char *filename) 
 {
     int sum = 0;
 
-    while (*str) 
+    while (*filename) 
     {
-        sum += *str;
-        ++str;
+        sum += *filename;
+        ++filename;
     }
 
     return sum % HashTableSize;    
@@ -34,7 +34,7 @@ void freeHash(int size)
     {
         while (hashTable[index]) 
         {
-            free(hashTable[index]->str);
+            free(hashTable[index]->filename);
             struct linked_list *hashValue = hashTable[index];
             hashTable[index] = hashTable[index]->next;
             free(hashValue);
